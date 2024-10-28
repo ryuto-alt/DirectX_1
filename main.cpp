@@ -26,7 +26,9 @@ IDXGISwapChain4* _swapchain = nullptr;
 ID3D12CommandAllocator* _cmdAllocator = nullptr;
 ID3D12GraphicsCommandList* _cmdList = nullptr;
 ID3D12CommandQueue* _cmdQueue = nullptr;
+ID3D12DescriptorHeap* rtvHeaps = nullptr;
 #pragma endregion
+
 
 
 HRESULT D3D12CreateDevice(
@@ -89,6 +91,7 @@ int main() {
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 #endif
 	DebugOutputFormatString("Show window test.\n");
+	DebugOutputFormatString("S_OK.\n");
 
 	// ウィンドウクラスの生成
 	WNDCLASSEX w = {};
@@ -172,13 +175,20 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	result = _dev->CreateCommandQueue(&cmdQueueDesc, IID_PPV_ARGS(&_cmdQueue));
 #pragma endregion
 
+#pragma region DescriptorHeap作成
+	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
 
+	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;//レンダーターゲットビュー(RTV)
+	heapDesc.NodeMask = 0;
+	heapDesc.NumDescriptors = 2;//表裏の２つ
+	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;//特に指定なし
+#pragma endregion
 
 
 
 	// ウィンドウオブジェクトの生成
 	HWND hwnd = CreateWindow(w.lpszClassName,
-		_T("DX12テスト"),
+		_T("DX12"),
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT,
 		CW_USEDEFAULT,
@@ -226,6 +236,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 #pragma endregion
 
 
+	result = _dev->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&rtvHeaps));
 
 	// メッセージループ
 	MSG msg = {};
