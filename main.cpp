@@ -295,7 +295,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	_cmdList->OMSetRenderTargets(1, &rtvH, true, nullptr);
 
 	//画面クリア
-	float clearColor[] = { 1.0f,1.0f,0.0f,1.0f };//黄色
+	float clearColor[] = { 89.0f / 255.0f, 136.0f / 255.0f, 187.0f / 255.0f, 1.0f };
 	_cmdList->ClearRenderTargetView(rtvH, clearColor, 0, nullptr);
 
 
@@ -306,6 +306,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	ID3D12CommandList* cmdLists[] = { _cmdList };
 	_cmdQueue->ExecuteCommandLists(1, cmdLists);  // コマンドリストを実行キューに送信
 
+	//コマンドリスト、アロケータ両方リセット
 	_cmdAllocator->Reset();//キューをクリア
 	_cmdList->Reset(_cmdAllocator, nullptr);//再びコマンドリストをためる準備
 
