@@ -27,7 +27,8 @@ ID3D12CommandAllocator*		_cmdAllocator = nullptr;
 ID3D12GraphicsCommandList*	_cmdList = nullptr;
 ID3D12CommandQueue*			_cmdQueue = nullptr;
 ID3D12DescriptorHeap*		 rtvHeaps = nullptr;
-
+ID3D12Fence* _fence = nullptr;
+UINT64	_fenceVal = 0;
 #pragma endregion
 
 
@@ -54,6 +55,16 @@ HRESULT CreateSwapChainForHwnd(
 );
 
 #pragma endregion
+
+#pragma region fence
+HRESULT CreateFence(
+	UINT64 InitialiValue,//初期価値(0)
+	D3D12_FENCE_FLAGS Flags,//とりあえずD3D12_FENCE_FLAG_NONEでよい
+	REFIID riid,
+	void** ppFence
+);
+#pragma endregion
+
 
 
 
@@ -92,6 +103,16 @@ void ExecuteCommandLists(
 	ID3D12CommandList* const* ppCommandLists		//コマンドリスト配列の先頭アドレス
 
 );
+
+void EnableDebugLayer()
+{
+	ID3D12Debug* debugLayer = nullptr;
+	auto result = D3D12GetDebugInterface(
+		IID_PPV_ARGS(&debugLayer));
+
+	debugLayer->EnableDebugLayer();					//デバッグレイヤーを有効化
+	debugLayer->Release();							//有効化したらインタフェースを解放する
+}
 
 
 // WindowProcedure のプロトタイプ宣言
@@ -133,6 +154,24 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	// 関数を使ってウィンドウのサイズを補正する
 	AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);
+
+
+
+#pragma region デバッグレイヤー
+
+#ifdef _DEBUG
+	//デバッグレイヤーをオン
+	EnableDebugLayer();
+#endif // DEBUG
+
+#ifdef _DEBUG
+	CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, IID_PPV_ARGS(&_dxgiFactory));
+#else
+	CreateDXGIFactory1(IID_PPV_ARGS(&_dxgiFactory));
+#endif
+	
+
+#pragma endregion
 
 #pragma region Direct3D初期化
 	//Direct3Dデバイスの初期化
@@ -286,41 +325,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	result = _cmdAllocator->Reset();
 
-	auto bbIdx = _swapchain->GetCurrentBackBufferIndex();
-	auto rtvH = rtvHeaps->GetCPUDescriptorHandleForHeapStart();
-
-	rtvH.ptr += bbIdx * _dev->GetDescriptorHandleIncrementSize(
-		D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
-	_cmdList->OMSetRenderTargets(1, &rtvH, true, nullptr);
-
-	//画面クリア
-	float clearColor[] = { 89.0f / 255.0f, 136.0f / 255.0f, 187.0f / 255.0f, 1.0f };
-	_cmdList->ClearRenderTargetView(rtvH, clearColor, 0, nullptr);
+	
 
 
-	//命令のクローズ
-	_cmdList->Close();
+	
 
-	// コマンドリスト配列を用意して実行
-	ID3D12CommandList* cmdLists[] = { _cmdList };
-	_cmdQueue->ExecuteCommandLists(1, cmdLists);  // コマンドリストを実行キューに送信
-
-	//コマンドリスト、アロケータ両方リセット
-	_cmdAllocator->Reset();//キューをクリア
-	_cmdList->Reset(_cmdAllocator, nullptr);//再びコマンドリストをためる準備
-
-	//フリップ
-	_swapchain->Present(1, 0);//垂直同期のため1
-
+	
 #pragma endregion
 
 
-	
 
-	
 
-	
 
 	// メッセージループ
 	MSG msg = {};
@@ -330,11 +345,39 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
-
 		//アプリケーションが終わるときにメッセージがWM_QUITになる
 		if (msg.message == WM_QUIT) {
 			break;
 		}
+
+		auto bbIdx = _swapchain->GetCurrentBackBufferIndex();
+		auto rtvH = rtvHeaps->GetCPUDescriptorHandleForHeapStart();
+
+		rtvH.ptr += bbIdx * _dev->GetDescriptorHandleIncrementSize(
+			D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+		_cmdList->OMSetRenderTargets(1, &rtvH, true, nullptr);
+
+		//画面クリア
+		float clearColor[] = { 89.0f / 255.0f, 136.0f / 255.0f, 187.0f / 255.0f, 1.0f };
+		_cmdList->ClearRenderTargetView(rtvH, clearColor, 0, nullptr);
+
+		//命令のクローズ
+		_cmdList->Close();
+
+		// コマンドリスト配列を用意して実行
+		ID3D12CommandList* cmdLists[] = { _cmdList };
+		_cmdQueue->ExecuteCommandLists(1, cmdLists);  // コマンドリストを実行キューに送信
+
+		//フリップ
+		_swapchain->Present(1, 0);//垂直同期のため1
+
+		//コマンドリスト、アロケータ両方リセット
+		_cmdAllocator->Reset();//キューをクリア
+		_cmdList->Reset(_cmdAllocator, nullptr);//再びコマンドリストをためる準備
+
+
+		
 	}
 
 	//もうクラスは使わないので登録解除する
