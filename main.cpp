@@ -36,6 +36,24 @@ HRESULT D3D12CreateDevice(
 	void** ppDevice//後述
 );
 
+#pragma region SwapChain
+//SwapChain生成
+HRESULT CreateSwapChainForHwnd(
+	IUnknown* pDevice,//コマンドキューオブジェクト
+	HWND hwnd,//ウィンドウハンドル
+	const DXGI_SWAP_CHAIN_DESC1* pDesc,//スワップチェーン設定
+	const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullscreenDesc,//スワップチェーン設定
+	IDXGIOutput* pRestrictToOutput,//これもnullptr
+	IDXGISwapChain** ppSwapChain//スワップチェーンオブジェクト取得用
+
+);
+
+#pragma endregion
+
+
+
+
+
 ///@brief コンソール画面にフォーマット付き文字列を表示
 ///@param format フォーマット(%dとか%fとかの)
 ///@param 可変長引数
@@ -86,9 +104,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);
 
 #pragma region Direct3D初期化
-
-
-
 	//Direct3Dデバイスの初期化
 	D3D_FEATURE_LEVEL featureLevel;
 
@@ -159,6 +174,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 
+
+
 	// ウィンドウオブジェクトの生成
 	HWND hwnd = CreateWindow(w.lpszClassName,
 		_T("DX12テスト"),
@@ -173,6 +190,40 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		nullptr);
 	// ウィンドウ表示
 	ShowWindow(hwnd, SW_SHOW);
+
+
+#pragma region SwapChain生成
+	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
+
+	swapchainDesc.Width = window_width;
+	swapchainDesc.Height = window_height;
+	swapchainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	swapchainDesc.Stereo = false;
+	swapchainDesc.SampleDesc.Count = 1;
+	swapchainDesc.SampleDesc.Quality = 0;
+	swapchainDesc.BufferUsage = DXGI_USAGE_BACK_BUFFER;
+	swapchainDesc.BufferCount = 2;
+
+	//バックバッファーは伸び縮み可能
+	swapchainDesc.Scaling = DXGI_SCALING_STRETCH;
+
+	//フリップ後は速やか破棄
+	swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+
+	//特に指定なし
+	swapchainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+
+	//ウィンドウー＞フルスクリーン切り替え可能
+	swapchainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+
+	result = _dxgiFactory->CreateSwapChainForHwnd(
+		_cmdQueue,
+		hwnd,
+		&swapchainDesc,
+		nullptr,
+		nullptr,
+		(IDXGISwapChain1**)&_swapchain);
+#pragma endregion
 
 
 
