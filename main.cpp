@@ -20,14 +20,16 @@ const int32_t window_height = 720;
 
 #pragma region ID3D12定義
 
-ID3D12Device* _dev = nullptr;
-IDXGIFactory6* _dxgiFactory = nullptr;
-IDXGISwapChain4* _swapchain = nullptr;
-ID3D12CommandAllocator* _cmdAllocator = nullptr;
-ID3D12GraphicsCommandList* _cmdList = nullptr;
-ID3D12CommandQueue* _cmdQueue = nullptr;
-ID3D12DescriptorHeap* rtvHeaps = nullptr;
+ID3D12Device*				_dev = nullptr;
+IDXGIFactory6*				_dxgiFactory = nullptr;
+IDXGISwapChain4*			_swapchain = nullptr;
+ID3D12CommandAllocator*		_cmdAllocator = nullptr;
+ID3D12GraphicsCommandList*	_cmdList = nullptr;
+ID3D12CommandQueue*			_cmdQueue = nullptr;
+ID3D12DescriptorHeap*		 rtvHeaps = nullptr;
+
 #pragma endregion
+
 
 
 
@@ -45,6 +47,7 @@ HRESULT CreateSwapChainForHwnd(
 	HWND hwnd,//ウィンドウハンドル
 	const DXGI_SWAP_CHAIN_DESC1* pDesc,//スワップチェーン設定
 	const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullscreenDesc,//スワップチェーン設定
+	
 	IDXGIOutput* pRestrictToOutput,//これもnullptr
 	IDXGISwapChain** ppSwapChain//スワップチェーンオブジェクト取得用
 
@@ -64,10 +67,32 @@ void DebugOutputFormatString(const char* format, ...) {
 #ifdef _DEBUG
 	va_list valist;
 	va_start(valist, format);
-	vprintf(format, valist);  // 修正: printf ではなく vprintf を使う
+	vprintf(format, valist);						// 修正: printf ではなく vprintf を使う
 	va_end(valist);
 #endif // DEBUG
 }
+
+void CreateRenderTargetView(
+	ID3D12Resource* pResource,//バッファー
+	const D3D12_RENDER_TARGET_VIEW_DESC* pDesc,		//今回はnullptr
+	D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor		//ディスクリプタヒープハンドル
+);
+
+void OMSetRenderTargets(
+	UINT numRTVDescriptors,//レンダーターゲット数
+	const D3D12_CPU_DESCRIPTOR_HANDLE* pRTVHandles,	//レンダーターゲットハンドルの先頭アドレス
+
+	BOOL RTsSingleHandleToDescriptorRange,			//複数時に連続してるか
+	const D3D12_CPU_DESCRIPTOR_HANDLE				//深度ステンシルバッファビューハンドル
+	* pDepthStencilDescriptor
+);
+
+void ExecuteCommandLists(
+	UINT NumCommandLists,							//実行するコマンドリスト数(1でおｋ)
+	ID3D12CommandList* const* ppCommandLists		//コマンドリスト配列の先頭アドレス
+
+);
+
 
 // WindowProcedure のプロトタイプ宣言
 LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
@@ -82,6 +107,9 @@ LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	}
 	return DefWindowProc(hwnd, msg, wparam, lparam);  // 規定の処理を行う
 }
+
+
+
 
 
 
@@ -202,7 +230,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	ShowWindow(hwnd, SW_SHOW);
 
 
-#pragma region SwapChain生成
+#pragma region SwapChain
 	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
 
 	swapchainDesc.Width = window_width;
@@ -233,10 +261,65 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		nullptr,
 		nullptr,
 		(IDXGISwapChain1**)&_swapchain);
+
+	DXGI_SWAP_CHAIN_DESC swcDesc = {};
+	result = _swapchain->GetDesc(&swcDesc);
+
+	std::vector<ID3D12Resource*>_backBuffers(swcDesc.BufferCount);
+
+	//DescriptorHeapのリザルト
+	result = _dev->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&rtvHeaps));
+
+	//DescriptorHandle
+	D3D12_CPU_DESCRIPTOR_HANDLE handle
+		= rtvHeaps->GetCPUDescriptorHandleForHeapStart();
+
+	//ポインタをずらす
+	for (int idx = 0; idx < swcDesc.BufferCount; ++idx) {
+	result = _swapchain->GetBuffer(idx, IID_PPV_ARGS(&_backBuffers[idx]));
+
+	handle.ptr += idx * _dev->GetDescriptorHandleIncrementSize(
+		D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+	_dev->CreateRenderTargetView(_backBuffers[idx], nullptr, handle);
+	}
+
+	result = _cmdAllocator->Reset();
+
+	auto bbIdx = _swapchain->GetCurrentBackBufferIndex();
+	auto rtvH = rtvHeaps->GetCPUDescriptorHandleForHeapStart();
+
+	rtvH.ptr += bbIdx * _dev->GetDescriptorHandleIncrementSize(
+		D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+	_cmdList->OMSetRenderTargets(1, &rtvH, true, nullptr);
+
+	//画面クリア
+	float clearColor[] = { 1.0f,1.0f,0.0f,1.0f };//黄色
+	_cmdList->ClearRenderTargetView(rtvH, clearColor, 0, nullptr);
+
+
+	//命令のクローズ
+	_cmdList->Close();
+
+	// コマンドリスト配列を用意して実行
+	ID3D12CommandList* cmdLists[] = { _cmdList };
+	_cmdQueue->ExecuteCommandLists(1, cmdLists);  // コマンドリストを実行キューに送信
+
+	_cmdAllocator->Reset();//キューをクリア
+	_cmdList->Reset(_cmdAllocator, nullptr);//再びコマンドリストをためる準備
+
+	//フリップ
+	_swapchain->Present(1, 0);//垂直同期のため1
+
 #pragma endregion
 
 
-	result = _dev->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&rtvHeaps));
+	
+
+	
+
+	
 
 	// メッセージループ
 	MSG msg = {};
