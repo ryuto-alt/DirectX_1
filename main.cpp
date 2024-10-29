@@ -1,17 +1,19 @@
-﻿#include <Windows.h>
-#include <tchar.h>
-#include<d3d12.h>
-#include<dxgi1_6.h>
-#include <vector>
-#include <DirectXMath.h>
-#ifdef _DEBUG
+﻿#ifdef _DEBUG
 #include <iostream>
 #endif
+#include <Windows.h>
+#include <tchar.h>
+#include <d3d12.h>
+#include <dxgi1_6.h>
+#include <vector>
+#include <DirectXMath.h>
+#include<d3dcompiler.h>
 
 #include"Vector3.h"
 
 #pragma comment(lib,"d3d12.lib")
 #pragma comment(lib,"dxgi.lib")
+#pragma comment(lib,"d3dcompiler.lib")
 
 using namespace std;
 using namespace DirectX;
@@ -31,8 +33,8 @@ ID3D12CommandAllocator*		_cmdAllocator = nullptr;
 ID3D12GraphicsCommandList*	_cmdList = nullptr;
 ID3D12CommandQueue*			_cmdQueue = nullptr;
 ID3D12DescriptorHeap*		 rtvHeaps = nullptr;
-ID3D12Fence* _fence = nullptr;
-UINT64	_fenceVal = 0;
+ID3D12Fence*				_fence = nullptr;
+UINT64						_fenceVal = 0;
 #pragma endregion
 
 
@@ -389,6 +391,152 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		nullptr,
 		IID_PPV_ARGS(&vertBuff));
 
+#pragma region VertMap
+
+	//頂点情報のコピー
+	XMFLOAT3* vertMap = nullptr;
+	result = vertBuff->Map(0, nullptr, (void**)&vertMap);
+	std::copy(std::begin(vertices), std::end(vertices), vertMap);
+	vertBuff->Unmap(0, nullptr);
+#pragma endregion
+
+#pragma region VS,PSシェーダー読み込み
+	ID3DBlob* _vsBlob = nullptr;
+	ID3DBlob* _psBlob = nullptr;
+	ID3DBlob* errorBlob = nullptr;
+	
+	//VertexShader
+	result = D3DCompileFromFile(
+		L"BasicVertexShader.hlsl",//シェーダー名
+		nullptr,//defineなし
+		D3D_COMPILE_STANDARD_FILE_INCLUDE,//インクルードはデフォルト
+		"BasicVS","vs_5_0",//関数はBasicVS 対象シェーダーはvs_5_0
+		D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,//デバッグ用および最適化なし
+		0,
+		&_vsBlob,&errorBlob	//エラー時はerrorBlobにメッセージが入る
+	);
+	//PixelShader
+	result = D3DCompileFromFile(
+		L"BasicPixelShader.hlsl",//シェーダー名
+		nullptr,
+		D3D_COMPILE_STANDARD_FILE_INCLUDE,
+		"BasicPS","ps_5_0",//関数はBasicPS
+		D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,//デバッグ用および最適化なし
+		0,
+		&_psBlob,&errorBlob
+
+	);
+
+
+#pragma endregion
+
+	D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
+		{
+		"POSITION",0,DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+		D3D12_APPEND_ALIGNED_ELEMENT,
+		D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0,
+	},
+	};
+
+
+#pragma region パイプライン
+
+	//パイプライン
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC gpipeline = {};
+	gpipeline.pRootSignature = nullptr;//あとで設定する
+
+	gpipeline.VS.pShaderBytecode = _vsBlob->GetBufferPointer();
+	gpipeline.VS.BytecodeLength = _vsBlob->GetBufferSize();
+	gpipeline.PS.pShaderBytecode = _psBlob->GetBufferPointer();
+	gpipeline.PS.BytecodeLength = _psBlob->GetBufferSize();
+
+	//サンプルマスク
+	//デフォルトのサンプルマスクを表す定数
+	gpipeline.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+
+	//
+	gpipeline.BlendState.AlphaToCoverageEnable = false;
+	gpipeline.BlendState.IndependentBlendEnable = false;
+
+	D3D12_RENDER_TARGET_BLEND_DESC renderTargetBlendDesc = {};
+
+	//加算や乗算、αブレンディングは使用しない
+	renderTargetBlendDesc.BlendEnable = false;
+
+	//論理演算は使用しない
+	renderTargetBlendDesc.LogicOpEnable = false;
+	renderTargetBlendDesc.RenderTargetWriteMask =
+		D3D12_COLOR_WRITE_ENABLE_ALL;
+
+	gpipeline.BlendState.RenderTarget[0] = renderTargetBlendDesc;
+
+	//まだアンチエイリアスは使わないためfalse
+	gpipeline.RasterizerState.MultisampleEnable = false;
+	gpipeline.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;//カリングしない
+	gpipeline.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;//中身を塗りつぶす
+	gpipeline.RasterizerState.DepthClipEnable = true;//深度方向のクリッピングは有効に
+	
+	gpipeline.InputLayout.pInputElementDescs = inputLayout;//レイアウト先頭アドレス
+	gpipeline.InputLayout.NumElements = _countof(inputLayout);//レイアウト配列の要素数
+
+	gpipeline.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;//カットなし
+	
+	//三角形で構成
+	gpipeline.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+
+	gpipeline.NumRenderTargets = 1;//今は１のみ
+	gpipeline.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM; //0～１に正規化されたRGBA
+
+	gpipeline.SampleDesc.Count = 1;//サンプリングは１ピクセルにつき１
+	gpipeline.SampleDesc.Quality = 0;//クオリティは最低
+
+
+#pragma region rootSignature作成
+
+	D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
+	ID3D12RootSignature* rootsignature = nullptr;
+	rootSignatureDesc.Flags =
+		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+	//バイナリコードの作成
+	ID3DBlob* rootSigBlob = nullptr;
+
+	result = D3D12SerializeRootSignature(
+		&rootSignatureDesc,//ルートシグネチャ設定
+		D3D_ROOT_SIGNATURE_VERSION_1_0,//ルートシグネチャバージョン
+		&rootSigBlob,//シェーダーを作ったときと同じ
+		&errorBlob //エラー処理も同じ
+	);
+
+	result = _dev->CreateRootSignature(
+		0,//nodemask 0でよい
+		rootSigBlob->GetBufferPointer(),//シェーダーの時と同様
+		rootSigBlob->GetBufferSize(),//シェーダーの時と同様
+		IID_PPV_ARGS(&rootsignature)
+	);
+
+	rootSigBlob->Release();//不要になったので解放
+
+	gpipeline.pRootSignature = rootsignature;
+#pragma endregion
+
+	ID3D12PipelineState* _pipelinestate = nullptr;
+	result = _dev->CreateGraphicsPipelineState(
+	&gpipeline,IID_PPV_ARGS(&_pipelinestate)
+	);
+#pragma endregion
+
+
+
+
+#pragma region vbViewの作成（頂点バッファービュー）
+
+	D3D12_VERTEX_BUFFER_VIEW vbView = {};
+	vbView.BufferLocation = vertBuff->GetGPUVirtualAddress();//バッファーの仮想アドレス
+	vbView.SizeInBytes = sizeof(vertices);//全バイト数
+	vbView.StrideInBytes = sizeof(vertices[0]);//1頂点あたりのバイト数
+#pragma endregion
+
 
 	// メッセージループ
 	MSG msg = {};
@@ -430,6 +578,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		float clearColor[] = { 89.0f / 255.0f, 136.0f / 255.0f, 187.0f / 255.0f, 1.0f };
 		_cmdList->ClearRenderTargetView(rtvH, clearColor, 0, nullptr);
 
+		_cmdList->IASetVertexBuffers(0, 1, &vbView);
+
+
+		//リソースバリア
 		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
 		_cmdList->ResourceBarrier(1, &BarrierDesc);
