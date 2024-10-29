@@ -3,20 +3,24 @@
 #include<d3d12.h>
 #include<dxgi1_6.h>
 #include <vector>
-
-
+#include <DirectXMath.h>
 #ifdef _DEBUG
 #include <iostream>
 #endif
+
+#include"Vector3.h"
 
 #pragma comment(lib,"d3d12.lib")
 #pragma comment(lib,"dxgi.lib")
 
 using namespace std;
+using namespace DirectX;
 
 // ウィンドウの幅と高さを指定
 const int32_t window_width = 1280;
 const int32_t window_height = 720;
+
+
 
 #pragma region ID3D12定義
 
@@ -78,6 +82,11 @@ HRESULT SetEventOnCompletion(
 	HANDLE hEvent//発生させるイベント
 );
 #pragma endregion
+
+#pragma region MyRegion
+
+#pragma endregion
+
 
 
 
@@ -159,7 +168,6 @@ int main() {
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 #endif
 	DebugOutputFormatString("Show window test.\n");
-	DebugOutputFormatString("S_OK.\n");
 
 	// ウィンドウクラスの生成
 	WNDCLASSEX w = {};
@@ -347,8 +355,39 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	
 #pragma endregion
 
+	XMFLOAT3 vertices[]=
+	{
+		{-1.0f,-1.0f,0.0f},//左下
+		{-1.0f,1.0f, 0.0f},//左上
+		{1.0f,-1.0f, 0.0f},//右下
+	};//3頂点
+	D3D12_HEAP_PROPERTIES heapapprop = {};
 
+	heapapprop.Type = D3D12_HEAP_TYPE_UPLOAD;
+	heapapprop.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	heapapprop.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
 
+	D3D12_RESOURCE_DESC resdesc = {};
+
+	resdesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	resdesc.Width = sizeof(vertices);//頂点情報が入るだけのサイズ
+	resdesc.Height = 1;
+	resdesc.DepthOrArraySize = 1;
+	resdesc.MipLevels = 1;
+	resdesc.Format = DXGI_FORMAT_UNKNOWN;
+	resdesc.SampleDesc.Count = 1;
+	resdesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	resdesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+	ID3D12Resource* vertBuff = nullptr;
+
+	result = _dev->CreateCommittedResource(
+		&heapapprop,
+		D3D12_HEAP_FLAG_NONE,
+		&resdesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&vertBuff));
 
 
 	// メッセージループ
