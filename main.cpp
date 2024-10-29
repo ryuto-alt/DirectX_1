@@ -65,6 +65,21 @@ HRESULT CreateFence(
 );
 #pragma endregion
 
+#pragma region Signal
+HRESULT Signal(
+	ID3D12Fence* pFence,//先ほど作ったフェンスオブジェ
+	UINT64 Value		//GPUの処理が完了した後になっているべき値(フェンス値)
+);
+#pragma endregion
+
+#pragma region SetEventOnCompletion
+HRESULT SetEventOnCompletion(
+	UINT64 Value,//この値になったらイベントを発生させる
+	HANDLE hEvent//発生させるイベント
+);
+#pragma endregion
+
+
 
 
 
@@ -323,13 +338,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	_dev->CreateRenderTargetView(_backBuffers[idx], nullptr, handle);
 	}
 
+	result = _dev->CreateFence(_fenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&_fence));
+
 	result = _cmdAllocator->Reset();
-
-	
-
-
-	
-
 	
 #pragma endregion
 
@@ -339,7 +350,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	// メッセージループ
 	MSG msg = {};
-	while (true) {
+	while (_fence->GetCompletedValue()!=_fenceVal) {
+
 		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
 		{
 			TranslateMessage(&msg);
@@ -368,6 +380,19 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		// コマンドリスト配列を用意して実行
 		ID3D12CommandList* cmdLists[] = { _cmdList };
 		_cmdQueue->ExecuteCommandLists(1, cmdLists);  // コマンドリストを実行キューに送信
+		//待ち
+		_cmdQueue->Signal(_fence, ++_fenceVal);
+		if (_fence->GetCompletedValue() != _fenceVal) {
+			//イベントハンドルの取得
+			auto event = CreateEvent(nullptr, false, false, nullptr);
+
+			_fence->SetEventOnCompletion(_fenceVal, event);
+			//イベントが発生するまで待ち続ける
+			WaitForSingleObject(event, INFINITE);
+
+			//イベントハンドルを閉じる
+			CloseHandle(event);
+		}
 
 		//フリップ
 		_swapchain->Present(1, 0);//垂直同期のため1
