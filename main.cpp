@@ -128,7 +128,11 @@ void EnableDebugLayer()
 	debugLayer->EnableDebugLayer();					//デバッグレイヤーを有効化
 	debugLayer->Release();							//有効化したらインタフェースを解放する
 }
-
+//リソースバリア
+void ResourceBarrier(
+	UINT NumBarriers,//設定バリアの数
+	const D3D12_RESOURCE_BARRIER* pBarriers//設定バリア構造体アドレス
+);
 
 // WindowProcedure のプロトタイプ宣言
 LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
@@ -339,8 +343,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	}
 
 	result = _dev->CreateFence(_fenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&_fence));
-
-	result = _cmdAllocator->Reset();
+	//result = _cmdAllocator->Reset();
 	
 #pragma endregion
 
@@ -350,7 +353,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	// メッセージループ
 	MSG msg = {};
-	while (_fence->GetCompletedValue()!=_fenceVal) {
+	while (true) {
 
 		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
 		{
@@ -363,6 +366,20 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		}
 
 		auto bbIdx = _swapchain->GetCurrentBackBufferIndex();
+
+		D3D12_RESOURCE_BARRIER BarrierDesc = {};
+		BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;//遷移
+		BarrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;//特に指定なし
+		BarrierDesc.Transition.pResource = _backBuffers[bbIdx];
+		BarrierDesc.Transition.Subresource = 0;
+		BarrierDesc.Transition.StateBefore
+			= D3D12_RESOURCE_STATE_PRESENT;//直前はPRESENT状態
+		BarrierDesc.Transition.StateAfter
+			= D3D12_RESOURCE_STATE_RENDER_TARGET;//今からレンダーターゲット状態
+
+		_cmdList->ResourceBarrier(1, &BarrierDesc);//バリア指定実行
+
+		//レンダーターゲット指定
 		auto rtvH = rtvHeaps->GetCPUDescriptorHandleForHeapStart();
 
 		rtvH.ptr += bbIdx * _dev->GetDescriptorHandleIncrementSize(
@@ -374,6 +391,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		float clearColor[] = { 89.0f / 255.0f, 136.0f / 255.0f, 187.0f / 255.0f, 1.0f };
 		_cmdList->ClearRenderTargetView(rtvH, clearColor, 0, nullptr);
 
+		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+		_cmdList->ResourceBarrier(1, &BarrierDesc);
+
 		//命令のクローズ
 		_cmdList->Close();
 
@@ -382,10 +403,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		_cmdQueue->ExecuteCommandLists(1, cmdLists);  // コマンドリストを実行キューに送信
 		//待ち
 		_cmdQueue->Signal(_fence, ++_fenceVal);
+
 		if (_fence->GetCompletedValue() != _fenceVal) {
 			//イベントハンドルの取得
 			auto event = CreateEvent(nullptr, false, false, nullptr);
-
 			_fence->SetEventOnCompletion(_fenceVal, event);
 			//イベントが発生するまで待ち続ける
 			WaitForSingleObject(event, INFINITE);
@@ -394,15 +415,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			CloseHandle(event);
 		}
 
-		//フリップ
-		_swapchain->Present(1, 0);//垂直同期のため1
 
 		//コマンドリスト、アロケータ両方リセット
 		_cmdAllocator->Reset();//キューをクリア
 		_cmdList->Reset(_cmdAllocator, nullptr);//再びコマンドリストをためる準備
 
-
-		
+		//フリップ
+		_swapchain->Present(1, 0);//垂直同期のため1
 	}
 
 	//もうクラスは使わないので登録解除する
