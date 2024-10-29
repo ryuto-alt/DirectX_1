@@ -432,7 +432,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
 		{
-		"POSITION",0,DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+		"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT, 0,
 		D3D12_APPEND_ALIGNED_ELEMENT,
 		D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0,
 	},
@@ -526,7 +526,26 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	);
 #pragma endregion
 
+#pragma region しざー矩形
 
+	D3D12_RECT scissorrect = {};
+
+	scissorrect.top = 0;//切り抜き上座標
+	scissorrect.left = 0;//切り抜き左座標
+	scissorrect.right = scissorrect.left+window_width;//切り抜き右座標
+	scissorrect.bottom = scissorrect.top+window_height;//切り抜き下座標
+#pragma endregion
+
+#pragma region ビューポート
+	D3D12_VIEWPORT viewport = {};
+
+	viewport.Width = window_width;//出力先の幅
+	viewport.Height = window_height;//出力先の高さ
+	viewport.TopLeftX = 0;			//出力先の左上座標X
+	viewport.TopLeftY = 0;			//出力先の左上座標Y
+	viewport.MaxDepth = 1.0f;		//深度最大値
+	viewport.MinDepth = 0.0f;		//深度最小値
+#pragma endregion
 
 
 #pragma region vbViewの作成（頂点バッファービュー）
@@ -565,6 +584,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			= D3D12_RESOURCE_STATE_RENDER_TARGET;//今からレンダーターゲット状態
 
 		_cmdList->ResourceBarrier(1, &BarrierDesc);//バリア指定実行
+		_cmdList->SetPipelineState(_pipelinestate);
 
 		//レンダーターゲット指定
 		auto rtvH = rtvHeaps->GetCPUDescriptorHandleForHeapStart();
@@ -578,7 +598,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		float clearColor[] = { 89.0f / 255.0f, 136.0f / 255.0f, 187.0f / 255.0f, 1.0f };
 		_cmdList->ClearRenderTargetView(rtvH, clearColor, 0, nullptr);
 
+		_cmdList->SetGraphicsRootSignature(rootsignature);
+		_cmdList->RSSetViewports(1, &viewport);
+		_cmdList->RSSetScissorRects(1, &scissorrect);
+
+		_cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		_cmdList->IASetVertexBuffers(0, 1, &vbView);
+
+		_cmdList->DrawInstanced(3, 1, 0, 0);
 
 
 		//リソースバリア
