@@ -7,9 +7,8 @@
 #include <dxgi1_6.h>
 #include <vector>
 #include <DirectXMath.h>
+#include <DirectXTex.h>
 #include<d3dcompiler.h>
-#include "externals/DirectXTex/DirectXTex.h"
-
 
 #include"Vector3.h"
 
@@ -88,11 +87,8 @@ HRESULT SetEventOnCompletion(
 );
 #pragma endregion
 
-#pragma region LoadFromWICFile
-HRESULT LoadFromWICFile(
-	const wchar_t* szfile, DWORD flags,
-	TexMetadata* metadata, ScratchImage& image
-);
+#pragma region MyRegion
+
 #pragma endregion
 
 
@@ -374,9 +370,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	//ポインタをずらす
 	for (int idx = 0; idx < swcDesc.BufferCount; ++idx) {
 		result = _swapchain->GetBuffer(idx, IID_PPV_ARGS(&_backBuffers[idx]));
-		_dev->CreateRenderTargetView(_backBuffers[idx], nullptr, handle);
+
 		handle.ptr += idx * _dev->GetDescriptorHandleIncrementSize(
 			D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+		_dev->CreateRenderTargetView(_backBuffers[idx], nullptr, handle);
 	}
 
 	result = _dev->CreateFence(_fenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&_fence));
@@ -449,68 +447,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	}
 #pragma endregion
 
-#pragma region しざー矩形
-
-	D3D12_RECT scissorrect = {};
-
-	scissorrect.top = 0;//切り抜き上座標
-	scissorrect.left = 0;//切り抜き左座標
-	scissorrect.right = scissorrect.left + window_width;//切り抜き右座標
-	scissorrect.bottom = scissorrect.top + window_height;//切り抜き下座標
-#pragma endregion
-
-#pragma region WICテクスチャのロード
-	TexMetadata metadata = {};
-	ScratchImage scratchImg = {};
-
-	result = LoadFromWICFile(
-		L"img/textest.png", WIC_FLAGS_NONE,
-		&metadata, scratchImg
-	);
-	auto img = scratchImg.GetImage(0, 0, 0);//生データ抽出
-#pragma endregion
 
 
-#pragma region HeapProp(texture)
-	D3D12_HEAP_PROPERTIES texheapprop = {};//ヒーププロパティ
+	
 
-	texheapprop.Type = D3D12_HEAP_TYPE_CUSTOM;
-	texheapprop.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
-	texheapprop.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
-	texheapprop.CreationNodeMask = 0;
-	texheapprop.VisibleNodeMask = 0;
 
-	D3D12_RESOURCE_DESC resDesc = {};
 
-	resDesc.Format = metadata.format;
-	resDesc.Width = metadata.width;
-	resDesc.Height = metadata.height;
-	resDesc.DepthOrArraySize = metadata.arraySize;
-	resDesc.SampleDesc.Count = 1;
-	resDesc.SampleDesc.Quality = 0;
-	resDesc.MipLevels = metadata.mipLevels;
-	resDesc.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(metadata.dimension);
-	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-	resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-	ID3D12Resource* texBuff = nullptr;
-
-	result = _dev->CreateCommittedResource(
-		&texheapprop,
-		D3D12_HEAP_FLAG_NONE,
-		&resDesc,
-		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-		nullptr,
-		IID_PPV_ARGS(&texBuff));
-#pragma endregion
-
-	result = texBuff->WriteToSubresource(
-		0,
-		nullptr,
-		img->pixels,		//元データアドレス
-		img->rowPitch,		//1ラインサイズ
-		img->slicePitch		//一枚サイズ
-	);
 
 
 
@@ -705,8 +648,70 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	viewport.MinDepth = 0.0f;		//深度最小値
 #pragma endregion
 
+#pragma region しざー矩形
+
+	D3D12_RECT scissorrect = {};
+
+	scissorrect.top = 0;//切り抜き上座標
+	scissorrect.left = 0;//切り抜き左座標
+	scissorrect.right = scissorrect.left + window_width;//切り抜き右座標
+	scissorrect.bottom = scissorrect.top + window_height;//切り抜き下座標
+#pragma endregion
+
+#pragma region WICテクスチャ
+	TexMetadata metadata = {};
+	ScratchImage scratchImg = {};
+	result = LoadFromWICFile(L"img/textest.png", WIC_FLAGS_NONE, &metadata, scratchImg);
+	auto img = scratchImg.GetImage(0, 0, 0);//生データ抽出
+
+#pragma endregion
 
 
+
+
+#pragma region HeapProp(texture)
+	D3D12_HEAP_PROPERTIES texheapprop = {};//ヒーププロパティ
+
+	texheapprop.Type = D3D12_HEAP_TYPE_CUSTOM;
+	texheapprop.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
+	texheapprop.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
+	texheapprop.CreationNodeMask = 0;
+	texheapprop.VisibleNodeMask = 0;
+
+	D3D12_RESOURCE_DESC resDesc = {};
+
+	resDesc.Format =metadata.format;//DXGI_FORMAT_R8G8B8A8_UNORM;//RGBAフォーマット
+	resDesc.Width = static_cast<UINT>(metadata.width);//幅
+	resDesc.Height = static_cast<UINT>(metadata.height);//高さ
+	resDesc.DepthOrArraySize = 1;//2Dで配列でもないので１
+	resDesc.SampleDesc.Count = 1;//通常テクスチャなのでアンチェリしない
+	resDesc.SampleDesc.Quality = 0;//
+	resDesc.MipLevels = 1;//ミップマップしないのでミップ数は１つ
+	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;//2Dテクスチャ用
+	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;//レイアウトについては決定しない
+	resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;//とくにフラグなし
+
+	ID3D12Resource* texBuff = nullptr;
+
+	result = _dev->CreateCommittedResource(
+		&texheapprop,
+		D3D12_HEAP_FLAG_NONE,
+		&resDesc,
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+		nullptr,
+		IID_PPV_ARGS(&texBuff));
+
+	result = texBuff->WriteToSubresource(
+		0,
+		nullptr,//全領域へコピー
+		img->pixels,//元データアドレス
+		static_cast<UINT>(img->rowPitch),//1ラインサイズ
+		static_cast<UINT>(img->slicePitch)//全サイズ
+	);
+
+#pragma endregion
+
+	
 
 
 #pragma region vbViewの作成（頂点バッファービュー）
@@ -869,5 +874,4 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	return 0;
 }
-
 
