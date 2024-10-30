@@ -24,4 +24,13 @@
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="BasicPixelShader.hlsl" />
+    <FxCompile Include="BasicVertexShader.hlsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="BasicShaderHeader.hlsli">
+      <Filter>リソース ファイル</Filter>
+    </None>
+  </ItemGroup>
 </Project>
