@@ -673,7 +673,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 #pragma region WICテクスチャ
 	TexMetadata metadata = {};
 	ScratchImage scratchImg = {};
-	result = LoadFromWICFile(L"img/textest.png", WIC_FLAGS_NONE, &metadata, scratchImg);
+	result = LoadFromWICFile(L"img/uvChecker.png", WIC_FLAGS_NONE, &metadata, scratchImg);
 	auto img = scratchImg.GetImage(0, 0, 0);//生データ抽出
 
 #pragma endregion
@@ -791,9 +791,19 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	src.PlacedFootprint.Footprint.RowPitch = AlignmentedSize(img->rowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
 	src.PlacedFootprint.Footprint.Format = img->format;
 
+
 	dst.pResource = texBuff;
 	dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
 	dst.SubresourceIndex = 0;
+
+	auto srcAddress = img->pixels;
+	auto rowPitch = AlignmentedSize(img->rowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+	for (int y = 0; y < img->height;++y) {
+		std::copy_n(srcAddress, rowPitch, mapforImg);
+
+		srcAddress += img->rowPitch;
+		mapforImg += rowPitch;
+	}
 
 #pragma region vbViewの作成（頂点バッファービュー）
 
