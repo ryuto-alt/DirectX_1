@@ -366,7 +366,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	//DescriptorHandle
 	D3D12_CPU_DESCRIPTOR_HANDLE handle
 		= rtvHeaps->GetCPUDescriptorHandleForHeapStart();
-	
+
 	//SRGBレンダーターゲットビュー設定
 	D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
 	rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
@@ -671,50 +671,105 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 #pragma endregion
 
+#pragma region UploadHeapProp
+	//まずは中間バッファとしてのUploadヒープ設定
+	D3D12_HEAP_PROPERTIES uploadHeapProp = {};
+	uploadHeapProp.Type = D3D12_HEAP_TYPE_UPLOAD;//Upload用
+	uploadHeapProp.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	uploadHeapProp.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	uploadHeapProp.CreationNodeMask = 0;//単一アダプタのため0
+	uploadHeapProp.VisibleNodeMask = 0;//単一アダプタのため0
+
+	D3D12_RESOURCE_DESC resDesc = {};
+	resDesc.Format = DXGI_FORMAT_UNKNOWN;
+	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;//単なるバッファとして
+	resDesc.Width = img->slicePitch;
+	resDesc.Height = 1;//
+	resDesc.DepthOrArraySize = 1;//
+	resDesc.MipLevels = 1;
+	resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;//連続したデータですよ
+	resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;//とくにフラグなし
+	resDesc.SampleDesc.Count = 1;//通常テクスチャなのでアンチェリしない
+	resDesc.SampleDesc.Quality = 0;//
+
+	//中間バッファ作成
+	ID3D12Resource* uploadbuff = nullptr;
+	result = _dev->CreateCommittedResource(
+		&uploadHeapProp,
+		D3D12_HEAP_FLAG_NONE,//特に指定なし
+		&resDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,//CPUから書き込み可能
+		nullptr,
+		IID_PPV_ARGS(&uploadbuff)
+	);
+
+#pragma endregion
 
 
 
 #pragma region HeapProp(texture)
-	D3D12_HEAP_PROPERTIES texheapprop = {};//ヒーププロパティ
+	D3D12_HEAP_PROPERTIES texHeapProp = {};//ヒーププロパティ
 
-	texheapprop.Type = D3D12_HEAP_TYPE_CUSTOM;
-	texheapprop.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
-	texheapprop.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
-	texheapprop.CreationNodeMask = 0;
-	texheapprop.VisibleNodeMask = 0;
+	texHeapProp.Type = D3D12_HEAP_TYPE_DEFAULT;
+	texHeapProp.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	texHeapProp.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	texHeapProp.CreationNodeMask = 0;
+	texHeapProp.VisibleNodeMask = 0;
 
-	D3D12_RESOURCE_DESC resDesc = {};
 
-	resDesc.Format = metadata.format;//DXGI_FORMAT_R8G8B8A8_UNORM;//RGBAフォーマット
-	resDesc.Width = static_cast<UINT>(metadata.width);//幅
-	resDesc.Height = static_cast<UINT>(metadata.height);//高さ
-	resDesc.DepthOrArraySize = 1;//2Dで配列でもないので１
-	resDesc.SampleDesc.Count = 1;//通常テクスチャなのでアンチェリしない
-	resDesc.SampleDesc.Quality = 0;//
-	resDesc.MipLevels = 1;//ミップマップしないのでミップ数は１つ
-	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;//2Dテクスチャ用
-	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;//レイアウトについては決定しない
-	resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;//とくにフラグなし
+	//リソース設定(変数は使いまわし)
+	resDesc.Format = metadata.format;
+	resDesc.Width = metadata.width;//幅
+	resDesc.Height = metadata.height;//高さ
+	resDesc.DepthOrArraySize = metadata.arraySize;//2Dで配列でもないので１
+	resDesc.MipLevels = metadata.mipLevels;//ミップマップしないのでミップ数は１つ
+	resDesc.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(metadata.dimension);//2Dテクスチャ用
+	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 
 	ID3D12Resource* texBuff = nullptr;
 
 	result = _dev->CreateCommittedResource(
-		&texheapprop,
+		&texHeapProp,
 		D3D12_HEAP_FLAG_NONE,
 		&resDesc,
-		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+		D3D12_RESOURCE_STATE_COPY_DEST,//コピー先
 		nullptr,
 		IID_PPV_ARGS(&texBuff));
 
-	result = texBuff->WriteToSubresource(
-		0,
-		nullptr,//全領域へコピー
-		img->pixels,//元データアドレス
-		static_cast<UINT>(img->rowPitch),//1ラインサイズ
-		static_cast<UINT>(img->slicePitch)//全サイズ
-	);
+	//result = texBuff->WriteToSubresource(
+	//	0,
+	//	nullptr,//全領域へコピー
+	//	img->pixels,//元データアドレス
+	//	static_cast<UINT>(img->rowPitch),//1ラインサイズ
+	//	static_cast<UINT>(img->slicePitch)//全サイズ
+	//);
 
+	uint8_t* mapforImg = nullptr;//image->pixelsと同じ型にする
+	result = uploadbuff->Map(0, nullptr, (void**)&mapforImg);
+	std::copy_n(img->pixels, img->slicePitch, mapforImg);
+	uploadbuff->Unmap(0, nullptr);
+
+	D3D12_TEXTURE_COPY_LOCATION src = {}, dst = {};
+	dst.pResource = texBuff;
+	dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+	dst.SubresourceIndex = 0;
 #pragma endregion
+
+#pragma region TEXTURE_COPY_LOCATION
+	src.pResource = uploadbuff;
+	src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+	src.PlacedFootprint.Offset = 0;
+	src.PlacedFootprint.Footprint.Width = metadata.width;
+	src.PlacedFootprint.Footprint.Height = metadata.height;
+	src.PlacedFootprint.Footprint.Height = metadata.height;
+	src.PlacedFootprint.Footprint.Depth = metadata.depth;
+	src.PlacedFootprint.Footprint.RowPitch = img->rowPitch;
+	src.PlacedFootprint.Footprint.Format = img->format;
+#pragma endregion
+
+
+
+
 
 
 
@@ -802,14 +857,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		D3D12_RESOURCE_BARRIER BarrierDesc = {};
 		BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;//遷移
 		BarrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;//特に指定なし
-		BarrierDesc.Transition.pResource = _backBuffers[bbIdx];
-		BarrierDesc.Transition.Subresource = 0;
+		BarrierDesc.Transition.pResource = texBuff;
+		BarrierDesc.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 		BarrierDesc.Transition.StateBefore
-			= D3D12_RESOURCE_STATE_PRESENT;//直前はPRESENT状態
+			= D3D12_RESOURCE_STATE_COPY_DEST;//直前はPRESENT状態
 		BarrierDesc.Transition.StateAfter
-			= D3D12_RESOURCE_STATE_RENDER_TARGET;//今からレンダーターゲット状態
+			= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;//今からレンダーターゲット状態
 
-		_cmdList->ResourceBarrier(1, &BarrierDesc);//バリア指定実行
+		_cmdList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+
 		_cmdList->SetPipelineState(_pipelinestate);
 
 		//レンダーターゲット指定
@@ -843,15 +899,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		//リソースバリア
 		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-		_cmdList->ResourceBarrier(1, &BarrierDesc);
 
-		//命令のクローズ
+		_cmdList->ResourceBarrier(1, &BarrierDesc);//バリア指定実行
+
 		_cmdList->Close();
 
-		// コマンドリスト配列を用意して実行
+		//コマンドリスト実行
 		ID3D12CommandList* cmdLists[] = { _cmdList };
-		_cmdQueue->ExecuteCommandLists(1, cmdLists);  // コマンドリストを実行キューに送信
-		//待ち
+		_cmdQueue->ExecuteCommandLists(1, cmdLists);
 		_cmdQueue->Signal(_fence, ++_fenceVal);
 
 		if (_fence->GetCompletedValue() != _fenceVal) {
