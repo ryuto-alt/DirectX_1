@@ -600,22 +600,35 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	descTblRange[1].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
 	//ルートパラメーター
-	D3D12_ROOT_PARAMETER rootparam[2] = {};
-	rootparam[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	//ピクセルシェーダーから見える
-	rootparam[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-	//ディスクリプタレンジのアドレス
-	rootparam[0].DescriptorTable.pDescriptorRanges = &descTblRange[0];
+	D3D12_ROOT_PARAMETER rootparam = {};
+
+	rootparam.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+
+	//配列先頭アドレス
+	rootparam.DescriptorTable.pDescriptorRanges = &descTblRange[0];
+
 	//ディスクリプタレンジ数
-	rootparam[0].DescriptorTable.NumDescriptorRanges = 1;
+	rootparam.DescriptorTable.NumDescriptorRanges = 2;
 
-	rootparam[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	rootparam[1].DescriptorTable.pDescriptorRanges = &descTblRange[1];
-	rootparam[1].DescriptorTable.NumDescriptorRanges = 1;
-	rootparam[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	//すべてのシェーダーから見える
+	rootparam.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-	rootSignatureDesc.pParameters = &rootparam[0];//ルートパラメーター先頭アドレス
-	rootSignatureDesc.NumParameters = 2;
+	rootSignatureDesc.pParameters = &rootparam;//ルートパラメーター先頭アドレス
+	rootSignatureDesc.NumParameters = 1;
+
+	//rootparam[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	////ピクセルシェーダーから見える
+	//rootparam[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	////ディスクリプタレンジのアドレス
+	//rootparam[0].DescriptorTable.pDescriptorRanges = &descTblRange[0];
+	////ディスクリプタレンジ数
+	//rootparam[0].DescriptorTable.NumDescriptorRanges = 1;
+
+	//rootparam[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	//rootparam[1].DescriptorTable.pDescriptorRanges = &descTblRange[1];
+	//rootparam[1].DescriptorTable.NumDescriptorRanges = 1;
+	//rootparam[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	
 
 	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
 
@@ -962,10 +975,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		_cmdList->SetGraphicsRootSignature(rootsignature);
 		_cmdList->SetDescriptorHeaps(1, &basicDescHeap);
 		_cmdList->SetGraphicsRootDescriptorTable(0, basicDescHeap->GetGPUDescriptorHandleForHeapStart());
-		auto heapHandle = basicDescHeap->GetGPUDescriptorHandleForHeapStart();
+		/*auto heapHandle = basicDescHeap->GetGPUDescriptorHandleForHeapStart();
 		heapHandle.ptr += _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-		_cmdList->SetGraphicsRootDescriptorTable(1, heapHandle);
+		_cmdList->SetGraphicsRootDescriptorTable(1, heapHandle);*/
 
 		_cmdList->DrawIndexedInstanced(6, 1, 0, 0, 0);
 
