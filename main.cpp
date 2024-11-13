@@ -331,6 +331,22 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	ShowWindow(hwnd, SW_SHOW);
 
 
+#pragma region PMDHeader
+	//PMDヘッダ構造体
+	struct PMDHeader {
+		float version; //例：00 00 80 3F == 1.00
+		char model_name[20];//モデル名
+		char comment[256];//モデルコメント
+	};
+	char signature[3];
+	PMDHeader pmdheader = {};
+
+	auto fp = fopen("Model/初音ミク.pmd", "rb");
+	fread(signature, sizeof(signature), 1, fp);
+	fread(&pmdheader, sizeof(pmdheader), 1, fp);
+#pragma endregion
+
+
 #pragma region SwapChain
 	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
 
@@ -758,19 +774,19 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	auto viewMat = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&target), XMLoadFloat3(&up));
 
-	auto projMat= XMMatrixPerspectiveFovLH(
+	auto projMat = XMMatrixPerspectiveFovLH(
 		XM_PIDIV2,
 		static_cast<float>(window_width) / static_cast<float>(window_height),
 		1.0f,
 		10.0f
 	);
 
-	
+
 
 	ID3D12Resource* constBuff = nullptr;
 	heapprop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	resDesc = CD3DX12_RESOURCE_DESC::Buffer((sizeof(XMMATRIX) + 0xff) & ~0xff);
-	
+
 
 	_dev->CreateCommittedResource(
 		&heapprop,
@@ -995,7 +1011,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		_cmdList->SetGraphicsRootSignature(rootsignature);
 		_cmdList->SetDescriptorHeaps(1, &basicDescHeap);
 		_cmdList->SetGraphicsRootDescriptorTable(0, basicDescHeap->GetGPUDescriptorHandleForHeapStart());
-		
+
 		angle += 0.01f;
 		worldMat = XMMatrixRotationY(angle);
 		*mapMatrix = worldMat * viewMat * projMat;
