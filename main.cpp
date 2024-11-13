@@ -401,22 +401,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 #pragma region Vertices
-
-
-
-	//struct Vertex
-	//{
-	//	XMFLOAT3 pos;//xyz座標
-	//	XMFLOAT2 UV;//UV座標
-	//};
-
-	//Vertex vertices[] =
-	//{
-	//	{ { -1.0f, -1.0f, 0.0f}, { 0.0f,1.0f } },//左下
-	//	{ { -1.0f,  1.0f, 0.0f}, { 0.0f,0.0f } },//左上
-	//	{ {  1.0f, -1.0f, 0.0f}, { 1.0f,1.0f }  },//右下
-	//	{ {  1.0f,  1.0f, 0.0f },{ 1.0f,0.0f }  } //右上
-	//};
+#pragma pack(push, 1)
 	struct PMDVertex
 	{
 		XMFLOAT3 pos;
@@ -425,7 +410,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		unsigned short noneNo[22];
 		unsigned char boneWeight;
 		unsigned char edgeFlg;
-	};//合計３２バイト
+	};//合計38バイト
+
+#pragma pack(pop)
 
 	//PMDヘッダ構造体
 	struct PMDHeader {
@@ -433,18 +420,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		char model_name[20];//モデル名
 		char comment[256];//モデルコメント
 	};
+
 	char signature[3];
-	constexpr size_t pmdvertex_size = 40;
+	PMDHeader pmdheader = {};
+	constexpr size_t pmdvertex_size = 38;
 	auto fp = fopen("Model/初音ミク.pmd", "rb");
+	fread(signature, sizeof(signature), 1, fp);
+	fread(&pmdheader, sizeof(pmdheader), 1, fp);
+
 	unsigned int vertNum; 
 	fread(&vertNum, sizeof(vertNum), 1, fp);
 	std::vector<unsigned char> vertices(vertNum * pmdvertex_size);
-
-	fread(signature, sizeof(signature), 1, fp);
-	PMDHeader pmdheader = {};
-
-	fread(&pmdheader, sizeof(pmdheader), 1, fp);
-
 	fread(vertices.data(), vertices.size(), 1, fp);
 
 #pragma endregion
@@ -513,7 +499,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	ModelHeapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	ModelDesc = CD3DX12_RESOURCE_DESC::Buffer(vertices.size() * sizeof(vertices[0]));
-
 	result = _dev->CreateCommittedResource(
 		&ModelHeapProp,
 		D3D12_HEAP_FLAG_NONE,
