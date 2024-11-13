@@ -331,20 +331,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	ShowWindow(hwnd, SW_SHOW);
 
 
-#pragma region PMDHeader
-	//PMDヘッダ構造体
-	struct PMDHeader {
-		float version; //例：00 00 80 3F == 1.00
-		char model_name[20];//モデル名
-		char comment[256];//モデルコメント
-	};
-	char signature[3];
-	PMDHeader pmdheader = {};
 
-	auto fp = fopen("Model/初音ミク.pmd", "rb");
-	fread(signature, sizeof(signature), 1, fp);
-	fread(&pmdheader, sizeof(pmdheader), 1, fp);
-#pragma endregion
 
 
 #pragma region SwapChain
@@ -413,20 +400,56 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 
+#pragma region Vertices
 
-	struct Vertex
-	{
-		XMFLOAT3 pos;//xyz座標
-		XMFLOAT2 UV;//UV座標
-	};
 
-	Vertex vertices[] =
+
+	//struct Vertex
+	//{
+	//	XMFLOAT3 pos;//xyz座標
+	//	XMFLOAT2 UV;//UV座標
+	//};
+
+	//Vertex vertices[] =
+	//{
+	//	{ { -1.0f, -1.0f, 0.0f}, { 0.0f,1.0f } },//左下
+	//	{ { -1.0f,  1.0f, 0.0f}, { 0.0f,0.0f } },//左上
+	//	{ {  1.0f, -1.0f, 0.0f}, { 1.0f,1.0f }  },//右下
+	//	{ {  1.0f,  1.0f, 0.0f },{ 1.0f,0.0f }  } //右上
+	//};
+	struct PMDVertex
 	{
-		{ { -1.0f, -1.0f, 0.0f}, { 0.0f,1.0f } },//左下
-		{ { -1.0f,  1.0f, 0.0f}, { 0.0f,0.0f } },//左上
-		{ {  1.0f, -1.0f, 0.0f}, { 1.0f,1.0f }  },//右下
-		{ {  1.0f,  1.0f, 0.0f },{ 1.0f,0.0f }  } //右上
+		XMFLOAT3 pos;
+		XMFLOAT3 normal;
+		XMFLOAT2 uv;
+		unsigned short noneNo[22];
+		unsigned char boneWeight;
+		unsigned char edgeFlg;
+	};//合計３２バイト
+
+	//PMDヘッダ構造体
+	struct PMDHeader {
+		float version; //例：00 00 80 3F == 1.00
+		char model_name[20];//モデル名
+		char comment[256];//モデルコメント
 	};
+	char signature[3];
+	constexpr size_t pmdvertex_size = 40;
+	auto fp = fopen("Model/初音ミク.pmd", "rb");
+	unsigned int vertNum; 
+	fread(&vertNum, sizeof(vertNum), 1, fp);
+	std::vector<unsigned char> vertices(vertNum * pmdvertex_size);
+
+	fread(signature, sizeof(signature), 1, fp);
+	PMDHeader pmdheader = {};
+
+	fread(&pmdheader, sizeof(pmdheader), 1, fp);
+
+	fread(vertices.data(), vertices.size(), 1, fp);
+
+#pragma endregion
+
+
 
 
 #pragma region heapprop(vertices)
@@ -458,6 +481,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		IID_PPV_ARGS(&vertBuff));
+	assert(SUCCEEDED(result));
 #pragma endregion
 
 #pragma region テクスチャデータの作成
@@ -477,19 +501,36 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 #pragma endregion
 
 
+#pragma region PMDHeader
+
+	
 
 
+	D3D12_HEAP_PROPERTIES ModelHeapProp = {};//ヒーププロパティ
+
+	D3D12_RESOURCE_DESC ModelDesc = {};
 
 
+	ModelHeapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	ModelDesc = CD3DX12_RESOURCE_DESC::Buffer(vertices.size() * sizeof(vertices[0]));
 
+	result = _dev->CreateCommittedResource(
+		&ModelHeapProp,
+		D3D12_HEAP_FLAG_NONE,
+		&ModelDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&vertBuff)
+		);
+	
+	assert(SUCCEEDED(result));
 
-
-
+#pragma endregion
 
 #pragma region VertMap
 
 	//頂点情報のコピー
-	Vertex* vertMap = nullptr;
+	unsigned char* vertMap = nullptr;
 	result = vertBuff->Map(0, nullptr, (void**)&vertMap);
 	std::copy(std::begin(vertices), std::end(vertices), vertMap);
 	vertBuff->Unmap(0, nullptr);
@@ -535,12 +576,33 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		D3D12_APPEND_ALIGNED_ELEMENT,
 		D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0,
 	},
-		{//uv追加
-			"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,
-			0,D3D12_APPEND_ALIGNED_ELEMENT,
-			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0
+		{
+		"NORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT, 0,
+		D3D12_APPEND_ALIGNED_ELEMENT,
+		D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0,
+	},
 
-		},
+	{//uv追加
+		"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,
+		0,D3D12_APPEND_ALIGNED_ELEMENT,
+		D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0
+
+	},
+		{
+		"BONE_NO",0,DXGI_FORMAT_R16G16_UINT, 0,
+		D3D12_APPEND_ALIGNED_ELEMENT,
+		D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0,
+	},
+		{
+		"WEIGHT",0,DXGI_FORMAT_R8_UINT, 0,
+		D3D12_APPEND_ALIGNED_ELEMENT,
+		D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0,
+	},
+		{
+		"EDGE_FLG",0,DXGI_FORMAT_R8_UINT, 0,
+		D3D12_APPEND_ALIGNED_ELEMENT,
+		D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0,
+	},
 	};
 #pragma endregion
 
@@ -768,8 +830,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	XMMATRIX matrix = XMMatrixIdentity();
 
 	auto worldMat = XMMatrixRotationY(XM_PIDIV4);
-	XMFLOAT3 eye(0, 0, -5);
-	XMFLOAT3 target(0, 0, 0);
+	XMFLOAT3 eye(0, 0, -15);
+	XMFLOAT3 target(0, 10, 0);
 	XMFLOAT3 up(0, 1, 0);
 
 	auto viewMat = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&target), XMLoadFloat3(&up));
@@ -778,7 +840,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		XM_PIDIV2,
 		static_cast<float>(window_width) / static_cast<float>(window_height),
 		1.0f,
-		10.0f
+		100.0f
 	);
 
 
@@ -898,8 +960,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	D3D12_VERTEX_BUFFER_VIEW vbView = {};
 	vbView.BufferLocation = vertBuff->GetGPUVirtualAddress();//バッファーの仮想アドレス
-	vbView.SizeInBytes = sizeof(vertices);//全バイト数
-	vbView.StrideInBytes = sizeof(vertices[0]);//1頂点あたりのバイト数
+	vbView.SizeInBytes =vertices.size();//全バイト数
+	vbView.StrideInBytes = pmdvertex_size;//1頂点あたりのバイト数
 #pragma endregion
 
 #pragma region IndexBuffer
@@ -1012,12 +1074,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		_cmdList->SetDescriptorHeaps(1, &basicDescHeap);
 		_cmdList->SetGraphicsRootDescriptorTable(0, basicDescHeap->GetGPUDescriptorHandleForHeapStart());
 
-		angle += 0.01f;
+		//angle += 0.01f;
 		worldMat = XMMatrixRotationY(angle);
 		*mapMatrix = worldMat * viewMat * projMat;
 
-		_cmdList->DrawIndexedInstanced(6, 1, 0, 0, 0);
-
+		//_cmdList->DrawIndexedInstanced(6, 1, 0, 0, 0);
+		_cmdList->DrawInstanced(vertNum, 1, 0, 0);
 		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
 		_cmdList->ResourceBarrier(1, &BarrierDesc);
