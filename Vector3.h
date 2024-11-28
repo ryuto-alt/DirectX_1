@@ -1,5 +1,10 @@
 #pragma once
-struct Vector3
-{
-	float x, y, z;
+
+/// <summary>
+/// 4ŽŸŒ³ƒxƒNƒgƒ‹
+/// </summary>
+struct Vector3 final {
+	float x;
+	float y;
+	float z;
 };

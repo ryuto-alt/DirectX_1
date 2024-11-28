@@ -824,13 +824,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 #pragma region 定数バッファの作成
 	XMMATRIX matrix = XMMatrixIdentity();
 
+	// ワールド行列
 	auto worldMat = XMMatrixRotationY(XM_PIDIV4);
-	XMFLOAT3 eye(0, 0, -15);
-	XMFLOAT3 target(0, 10, 0);
-	XMFLOAT3 up(0, 1, 0);
 
+	// カメラ位置を変更
+	XMFLOAT3 eye(0.0f, 20.0f, -15.0f);  // カメラ位置を下げる
+	XMFLOAT3 target(0.0f, 15.0f, 0.0f); // ターゲットを少し上に調整
+	XMFLOAT3 up(0.0f, 1.0f, 0.0f);     // 上方向はそのまま
+
+	// ビュー行列
 	auto viewMat = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&target), XMLoadFloat3(&up));
 
+	// 射影行列
 	auto projMat = XMMatrixPerspectiveFovLH(
 		XM_PIDIV2,
 		static_cast<float>(window_width) / static_cast<float>(window_height),
@@ -1151,7 +1156,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		//angle += 0.01f;
 		worldMat = XMMatrixRotationY(angle);
 		*mapMatrix = worldMat * viewMat * projMat;
-
+		angle += 0.01f;
 		_cmdList->DrawIndexedInstanced(indicesNum, 1, 0, 0, 0);
 		//_cmdList->DrawInstanced(vertNum, 1, 0, 0);
 		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
