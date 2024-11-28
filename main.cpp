@@ -438,6 +438,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 
+
 #pragma region heapprop(vertices)
 
 	D3D12_HEAP_PROPERTIES heapprop = {};//ヒーププロパティ
@@ -488,9 +489,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 #pragma region PMDHeader
-
-	
-
 
 	D3D12_HEAP_PROPERTIES ModelHeapProp = {};//ヒーププロパティ
 
@@ -949,18 +947,28 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	vbView.StrideInBytes = pmdvertex_size;//1頂点あたりのバイト数
 #pragma endregion
 
+
+#pragma region indices
+	std::vector<unsigned short> indices;
+
+	unsigned int indicesNum;
+	fread(&indicesNum, sizeof(indicesNum), 1, fp);
+
+	indices.resize(indicesNum);
+	fread(indices.data(), indices.size() * sizeof(indices[0]), 1, fp);
+
+#pragma endregion
+
+
 #pragma region IndexBuffer
 
-	unsigned short indices[] = {
-		0,1,2,
-		2,1,3
-	};
-
 	ID3D12Resource* idxBuff = nullptr;
+	D3D12_HEAP_PROPERTIES indicesHeapProp = {};//ヒーププロパティ
+	D3D12_RESOURCE_DESC indicesDesc = {};
 
-	//設定はバッファーサイズ以外　頂点バッファーの設定を使いまわしてよい
-	resdesc.Width = sizeof(indices);
-
+	heapprop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	resdesc = CD3DX12_RESOURCE_DESC::Buffer(indices.size() * sizeof(indices[0]));
+	
 	result = _dev->CreateCommittedResource(
 		&heapprop,
 		D3D12_HEAP_FLAG_NONE,
@@ -969,20 +977,21 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		nullptr,
 		IID_PPV_ARGS(&idxBuff)
 	);
+	assert(SUCCEEDED(result));
 
 	//作ったバッファにインデックスデータをコピー
 	unsigned short* mappedIdx = nullptr;
 	idxBuff->Map(0, nullptr, (void**)&mappedIdx);
-
+	
 	std::copy(std::begin(indices), std::end(indices), mappedIdx);
+
 	idxBuff->Unmap(0, nullptr);
 
 	//インデックスバッファービューを作成
 	D3D12_INDEX_BUFFER_VIEW ibView = {};
-
 	ibView.BufferLocation = idxBuff->GetGPUVirtualAddress();
 	ibView.Format = DXGI_FORMAT_R16_UINT;
-	ibView.SizeInBytes = sizeof(indices);
+	ibView.SizeInBytes =indices.size()*sizeof(indices[0]);
 
 #pragma endregion
 
@@ -1063,8 +1072,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		worldMat = XMMatrixRotationY(angle);
 		*mapMatrix = worldMat * viewMat * projMat;
 
-		//_cmdList->DrawIndexedInstanced(6, 1, 0, 0, 0);
-		_cmdList->DrawInstanced(vertNum, 1, 0, 0);
+		_cmdList->DrawIndexedInstanced(indicesNum, 1, 0, 0, 0);
+		//_cmdList->DrawInstanced(vertNum, 1, 0, 0);
 		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
 		_cmdList->ResourceBarrier(1, &BarrierDesc);
