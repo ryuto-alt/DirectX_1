@@ -14,3 +14,11 @@ cbuffer cbuff0 : register(b0)
 {
     matrix mat;
 };
+
+//ƒ}ƒeƒŠƒAƒ‹
+cbuffer Material : register(b1)
+{
+    float4 diffuse;
+    float4 specular;
+    float3 ambient;
+}
