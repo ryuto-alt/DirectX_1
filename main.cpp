@@ -96,7 +96,12 @@ HRESULT SetEventOnCompletion(
 );
 #pragma endregion
 
-#pragma region MyRegion
+#pragma region Matrices
+struct MatricesData
+{
+	XMMATRIX world;
+	XMMATRIX viewproj;
+};
 
 #pragma endregion
 
@@ -912,7 +917,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	ID3D12Resource* constBuff = nullptr;
 	heapprop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-	resDesc = CD3DX12_RESOURCE_DESC::Buffer((sizeof(XMMATRIX) + 0xff) & ~0xff);
+	resDesc = CD3DX12_RESOURCE_DESC::Buffer((sizeof(MatricesData) + 0xff) & ~0xff);
 
 
 	_dev->CreateCommittedResource(
@@ -924,9 +929,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		IID_PPV_ARGS(&constBuff)
 	);
 
-	XMMATRIX* mapMatrix;
+	MatricesData* mapMatrix;
 	result = constBuff->Map(0, nullptr, (void**)&mapMatrix);
-	*mapMatrix = matrix;
+	mapMatrix->world = worldMat;
+	mapMatrix->viewproj = viewMat * projMat;
 
 	auto basicHeapHandle = basicDescHeap->GetCPUDescriptorHandleForHeapStart();
 	basicHeapHandle.ptr += _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -1116,8 +1122,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		if (msg.message == WM_QUIT) {
 			break;
 		}
-
-
+		worldMat = XMMatrixRotationY(angle);
+		mapMatrix->world = worldMat;
+		mapMatrix->viewproj = viewMat * projMat;
+		angle += 0.01f;
 
 
 
@@ -1162,10 +1170,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		_cmdList->SetDescriptorHeaps(1, &basicDescHeap);
 		_cmdList->SetGraphicsRootDescriptorTable(0, basicDescHeap->GetGPUDescriptorHandleForHeapStart());
 
-		//angle += 0.01f;
-		worldMat = XMMatrixRotationY(angle);
-		*mapMatrix = worldMat * viewMat * projMat;
-		angle += 0.01f;
+	
 		_cmdList->DrawIndexedInstanced(indicesNum, 1, 0, 0, 0);
 		//_cmdList->DrawInstanced(vertNum, 1, 0, 0);
 		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
