@@ -427,6 +427,52 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 #pragma pack(pop)
 
 
+#pragma pack(1)
+	// PMDマテリアル構造体
+	struct PMDMaterial
+	{
+		XMFLOAT3 diffuse;  // ディフューズ色
+		float alpha;       // ディフューズα
+		float specularity; // スペキュラの強さ（乗算値）
+		XMFLOAT3 specular; // スペキュラ色
+		XMFLOAT3 ambient;  // アンビエント色
+		unsigned char toonIdx; // トゥーン番号（後述）
+		unsigned char edgeFlg; // マテリアルごとの輪郭線フラグ
+
+		// 注意：ここに2バイトのパディングがある！！
+
+		unsigned int indicesNum; // このマテリアルが割り当て
+		char texFilePath[200];
+	};
+#pragma pack()
+
+	// シェーダー側に投げられるマテリアルデータ
+	struct MaterialForHlsl
+	{
+		XMFLOAT3 diffuse;  // ディフューズ色
+		float alpha;       // ディフューズα
+		XMFLOAT3 specular; // スペキュラ色
+		float specularity; // スペキュラの強さ（乗算値）
+		XMFLOAT3 ambient;  // アンビエント色
+	};
+
+	// それ以外のマテリアルデータ
+	struct AdditionalMaterial
+	{
+		std::string texPath; // テクスチャファイルパス
+		int toonIdx;         // トゥーン番号
+		bool edgeFlg;        // マテリアルごとの輪郭線フラグ
+	};
+
+	// 全体をまとめるデータ
+	struct Material
+	{
+		unsigned int indicesNum; // インデックス数
+		MaterialForHlsl material;
+		AdditionalMaterial additional;
+	};
+
+
 
 
 	//PMDヘッダ構造体
@@ -1042,6 +1088,98 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	fread(indices.data(), indices.size() * sizeof(indices[0]), 1, fp);
 
 #pragma endregion
+
+#pragma region マテリアルデータの読み込み
+	unsigned int materialNum; // マテリアル数
+	fread(&materialNum, sizeof(materialNum), 1, fp);
+
+	std::vector<PMDMaterial> pmdMaterials(materialNum);
+
+	fread(
+		pmdMaterials.data(),
+		pmdMaterials.size() * sizeof(PMDMaterial),
+		1,
+		fp
+	); // 一気に読み込む
+
+
+	// PMDマテリアルから転送用マテリアルへの変換
+	std::vector<Material> materials(pmdMaterials.size());
+
+	// コピー
+	for (int i = 0; i < pmdMaterials.size(); ++i)
+	{
+		materials[i].indicesNum = pmdMaterials[i].indicesNum;
+		materials[i].material.diffuse = pmdMaterials[i].diffuse;
+		materials[i].material.alpha = pmdMaterials[i].alpha;
+		materials[i].material.specular = pmdMaterials[i].specular;
+		materials[i].material.specularity = pmdMaterials[i].specularity;
+		materials[i].material.ambient = pmdMaterials[i].ambient;
+	}
+
+
+	// マテリアルバッファーを作成
+	auto materialBuffSize = sizeof(MaterialForHlsl);
+	materialBuffSize = (materialBuffSize + 0xff) & ~0xff;
+	heapprop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	resDesc = CD3DX12_RESOURCE_DESC::Buffer(materialBuffSize * materialNum);//勿体ないけど仕方ないですね
+	ID3D12Resource* materialBuff = nullptr;
+	result = _dev->CreateCommittedResource(
+		&heapprop,
+		D3D12_HEAP_FLAG_NONE,
+		&resDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&materialBuff)
+	);
+
+	// マップマテリアルにコピー
+	char* mapMaterial = nullptr;
+
+	result = materialBuff->Map(0, nullptr, (void**)&mapMaterial);
+
+	for (auto& m : materials) {
+		*((MaterialForHlsl*)mapMaterial) = m.material; // データコピー
+		mapMaterial += materialBuffSize; // 次のアライメント位置まで進める（256の倍数）
+	}
+	materialBuff->Unmap(0, nullptr);
+
+
+	ID3D12DescriptorHeap* materialDescHeap = nullptr;
+	D3D12_DESCRIPTOR_HEAP_DESC materialDescHeapDesc = {};
+	materialDescHeapDesc.Flags =
+		D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	materialDescHeapDesc.NodeMask = 0;
+	materialDescHeapDesc.NumDescriptors = materialNum; // マテリアル数を指定
+	materialDescHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+
+	result = _dev->CreateDescriptorHeap(
+		&materialDescHeapDesc, IID_PPV_ARGS(&materialDescHeap));
+
+
+
+
+	D3D12_CONSTANT_BUFFER_VIEW_DESC matCBVDesc = {};
+
+	matCBVDesc.BufferLocation = materialBuff->GetGPUVirtualAddress(); // バッファーアドレス
+
+	matCBVDesc.SizeInBytes = materialBuffSize; // マテリアルの256アライメントサイズ
+
+	// 先頭を記録
+	auto matDescHeapH =
+		materialDescHeap->GetCPUDescriptorHandleForHeapStart();
+
+	// 定数バッファビューをマテリアル数分作成するループ（初期化処理）
+	for (int i = 0; i < materialNum; ++i)
+	{
+		_dev->CreateConstantBufferView(&matCBVDesc, matDescHeapH);
+		matDescHeapH.ptr += _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		matCBVDesc.BufferLocation += materialBuffSize;
+	}
+
+#pragma endregion
+
+
 
 
 #pragma region IndexBuffer
