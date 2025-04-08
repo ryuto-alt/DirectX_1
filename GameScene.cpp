@@ -1,3 +1,5 @@
+#define NOMINMAX
+#include <algorithm>
 #include "GameScene.h"
 #include "Engine.h"
 #include "ResourceManager.h"
@@ -136,7 +138,7 @@ void GameScene::Update(float deltaTime)
         // ‰æ–Ê‚Ì’[‚Å”½ŽË
         float screenWidth = static_cast<float>(GetEngine()->GetRenderer()->GetViewport().Width);
         float screenHeight = static_cast<float>(GetEngine()->GetRenderer()->GetViewport().Height);
-
+        #include "Renderer.h" // Add this include at the top of the file to resolve the incomplete type issue.
         if (m_enemyPositions[i].x < 0 || m_enemyPositions[i].x > screenWidth) {
             m_enemyVelocities[i].x *= -1;
         }

@@ -1,6 +1,8 @@
+#define NOMINMAX
 #include "AudioSystem.h"
 #include "ResourceManager.h"
 #include <cassert>
+#include <algorithm>
 
 // ComベースコンポーネントのCOMライブラリを使用するためのリンク
 #pragma comment(lib, "xaudio2.lib")
