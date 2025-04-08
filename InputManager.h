@@ -7,6 +7,7 @@
 #include <string>
 #include <memory>
 #include <DirectXMath.h>
+#include <DirectXTex.h>
 
 // キー入力管理クラス
 class InputManager {

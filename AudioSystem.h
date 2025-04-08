@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <memory>
 #include <vector>
+#include <DirectXTex.h>
 #include <wrl/client.h>
 
 struct AudioClip;
