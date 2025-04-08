@@ -3,7 +3,7 @@
 #include "ResourceManager.h"
 #include "Engine.h"
 
-#include <directx/d3dx12.h>
+#include <d3dx12.h>
 #include <d3dcompiler.h>
 #include <cassert>
 #include <algorithm>

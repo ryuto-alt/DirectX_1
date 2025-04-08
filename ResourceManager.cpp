@@ -2,7 +2,7 @@
 #include "Engine.h"
 #include "Renderer.h"
 
-#include <directx/d3dx12.h>
+#include <d3dx12.h>
 #include <cassert>
 #include <fstream>
 #include <system_error>
@@ -12,6 +12,7 @@
 // OBJモデル読み込み用ヘルパー
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
+#include <d3dcompiler.h>
 
 // MP3/OGG読み込み用ヘルパー
 // Note: 実際の実装ではライブラリ（libvorbis, minimp3など）をインクルードする必要があります
