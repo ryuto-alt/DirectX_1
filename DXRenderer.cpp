@@ -609,7 +609,7 @@ void DXRenderer::Render()
 
     // 単純にY軸回転を更新
     m_angle += 0.01f;
-    m_worldMatrix = XMMatrixRotationY(m_angle);
+   m_worldMatrix = XMMatrixRotationY(m_angle);
 
     // ワールド・ビュー・プロジェクション行列を合成
     XMMATRIX combinedMatrix = m_worldMatrix * m_camera->GetViewMatrix() * m_camera->GetProjectionMatrix();
