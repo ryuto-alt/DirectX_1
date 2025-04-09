@@ -1,15 +1,16 @@
-//頂点シェーダー->ピクセルシェーダーへのやり取りに使用する
-//構造体
-
-struct Output
-{
-    float4 svpos : SV_POSITION; //システム用頂点座標
-    float2 uv : TEXCOORD; //uv値
-};
-Texture2D<float4> tex : register(t0);
-SamplerState smp : register(s0);
-
+// 定数バッファ
 cbuffer cbuff0 : register(b0)
 {
-    matrix mat;
+    matrix mat; // 変換行列
+};
+
+// テクスチャとサンプラー
+Texture2D tex : register(t0);
+SamplerState smp : register(s0);
+
+// 頂点シェーダーの出力構造体
+struct Output
+{
+    float4 svpos : SV_POSITION;
+    float2 uv : TEXCOORD;
 };

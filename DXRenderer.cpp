@@ -383,13 +383,13 @@ bool DXRenderer::InitializePipelineState()
 {
     // Create the shader objects first
     m_shader = new DXShader(m_device.Get());
-    if (!m_shader->CompileVertexShader(L"BasicVertexShader.hlsl", "BasicVS"))
+    if (!m_shader->CompileVertexShader(L"./BasicVertexShader.hlsl", "BasicVS"))
     {
         std::cerr << "Failed to compile vertex shader" << std::endl;
         return false;
     }
 
-    if (!m_shader->CompilePixelShader(L"BasicPixelShader.hlsl", "BasicPS"))
+    if (!m_shader->CompilePixelShader(L"./BasicPixelShader.hlsl", "BasicPS"))
     {
         std::cerr << "Failed to compile pixel shader" << std::endl;
         return false;
@@ -516,7 +516,7 @@ bool DXRenderer::InitializeAssets()
 
     // Create texture
     m_texture = new DXTexture(m_device.Get(), m_cmdList.Get());
-    if (!m_texture->LoadFromFile(L"img/uvChecker.png"))
+    if (!m_texture->LoadFromFile(L"./img/uvChecker.png"))
     {
         std::cerr << "Failed to load texture" << std::endl;
         return false;

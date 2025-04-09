@@ -1,4 +1,9 @@
 #include "DXTexture.h"
+#include <d3d12.h>
+#include <DirectXTex.h>
+#include <wrl/client.h>
+#include <string>
+#include <iostream>
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -10,35 +15,48 @@ DXTexture::DXTexture(ID3D12Device* device, ID3D12GraphicsCommandList* commandLis
 
 DXTexture::~DXTexture()
 {
-    // Resources are automatically cleaned up by ComPtr
+    // ComPtr で自動解放
 }
 
 bool DXTexture::LoadFromFile(const std::wstring& filename)
 {
-    // Load texture using DirectXTex
+    // DirectXTex の LoadFromWICFile で画像ファイル読み込み
     HRESULT hr = LoadFromWICFile(
         filename.c_str(),
         WIC_FLAGS_NONE,
         &m_metadata,
         m_scratchImage);
 
-    if (FAILED(hr))
+    if (FAILED(hr)) {
+        std::wcerr << L"LoadFromWICFile failed for " << filename
+            << L", hr = 0x" << std::hex << hr << std::endl;
         return false;
+    }
 
-    // Get the first image in the file
+    // 画像の1枚目を取得
     const Image* image = m_scratchImage.GetImage(0, 0, 0);
-
-    // Create texture resource
-    if (!CreateTextureResource(m_metadata))
+    if (!image) {
+        std::cerr << "Failed to get image from scratchImage" << std::endl;
         return false;
+    }
 
-    // Create texture upload heap
-    if (!CreateTextureUploadHeap(image))
+    // テクスチャ用リソース作成
+    if (!CreateTextureResource(m_metadata)) {
+        std::cerr << "CreateTextureResource failed" << std::endl;
         return false;
+    }
 
-    // Copy texture data
-    if (!CopyTextureData(image))
+    // アップロードヒープ作成
+    if (!CreateTextureUploadHeap(image)) {
+        std::cerr << "CreateTextureUploadHeap failed" << std::endl;
         return false;
+    }
+
+    // アップロードヒープからテクスチャへコピー
+    if (!CopyTextureData(image)) {
+        std::cerr << "CopyTextureData failed" << std::endl;
+        return false;
+    }
 
     return true;
 }
@@ -56,15 +74,15 @@ D3D12_SHADER_RESOURCE_VIEW_DESC DXTexture::GetSrvDesc() const
 
 bool DXTexture::CreateTextureResource(const TexMetadata& metadata)
 {
-    // Define heap properties for the texture
+    // テクスチャリソースは GPU バインド用なので DEFAULT ヒープを使う
     D3D12_HEAP_PROPERTIES heapProps = {};
-    heapProps.Type = D3D12_HEAP_TYPE_CUSTOM;
-    heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
-    heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
+    heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+    heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
     heapProps.CreationNodeMask = 1;
     heapProps.VisibleNodeMask = 1;
 
-    // Define resource descriptor for the texture
+    // リソースディスクリプタの設定
     D3D12_RESOURCE_DESC resourceDesc = {};
     resourceDesc.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(metadata.dimension);
     resourceDesc.Alignment = 0;
@@ -78,7 +96,6 @@ bool DXTexture::CreateTextureResource(const TexMetadata& metadata)
     resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-    // Create texture resource
     HRESULT hr = m_device->CreateCommittedResource(
         &heapProps,
         D3D12_HEAP_FLAG_NONE,
@@ -87,15 +104,18 @@ bool DXTexture::CreateTextureResource(const TexMetadata& metadata)
         nullptr,
         IID_PPV_ARGS(&m_textureResource));
 
-    if (FAILED(hr))
+    if (FAILED(hr)) {
+        std::cerr << "CreateCommittedResource for texture failed, hr = 0x"
+            << std::hex << hr << std::endl;
         return false;
+    }
 
     return true;
 }
 
 bool DXTexture::CreateTextureUploadHeap(const Image* image)
 {
-    // Define heap properties for upload heap
+    // アップロード用ヒープは UPLOAD ヒープタイプを使う
     D3D12_HEAP_PROPERTIES heapProps = {};
     heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
     heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
@@ -103,7 +123,6 @@ bool DXTexture::CreateTextureUploadHeap(const Image* image)
     heapProps.CreationNodeMask = 1;
     heapProps.VisibleNodeMask = 1;
 
-    // Define resource descriptor for upload heap
     D3D12_RESOURCE_DESC resourceDesc = {};
     resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
     resourceDesc.Alignment = 0;
@@ -117,7 +136,6 @@ bool DXTexture::CreateTextureUploadHeap(const Image* image)
     resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-    // Create upload heap
     HRESULT hr = m_device->CreateCommittedResource(
         &heapProps,
         D3D12_HEAP_FLAG_NONE,
@@ -126,24 +144,27 @@ bool DXTexture::CreateTextureUploadHeap(const Image* image)
         nullptr,
         IID_PPV_ARGS(&m_textureUploadHeap));
 
-    if (FAILED(hr))
+    if (FAILED(hr)) {
+        std::cerr << "CreateCommittedResource for upload heap failed, hr = 0x"
+            << std::hex << hr << std::endl;
         return false;
+    }
 
     return true;
 }
 
 bool DXTexture::CopyTextureData(const Image* image)
 {
-    // Map upload heap
     UINT8* pUploadHeapData = nullptr;
     HRESULT hr = m_textureUploadHeap->Map(0, nullptr, reinterpret_cast<void**>(&pUploadHeapData));
-    if (FAILED(hr))
+    if (FAILED(hr)) {
+        std::cerr << "Mapping upload heap failed, hr = 0x"
+            << std::hex << hr << std::endl;
         return false;
+    }
 
-    // Calculate row pitch with alignment
     UINT64 alignedRowPitch = AlignmentedSize(image->rowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
 
-    // Copy image data to upload heap
     UINT8* pSrcData = image->pixels;
     for (size_t h = 0; h < image->height; ++h)
     {
@@ -153,7 +174,7 @@ bool DXTexture::CopyTextureData(const Image* image)
 
     m_textureUploadHeap->Unmap(0, nullptr);
 
-    // Set up copy source
+    // コピー元の設定
     D3D12_TEXTURE_COPY_LOCATION copySource = {};
     copySource.pResource = m_textureUploadHeap.Get();
     copySource.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
@@ -164,16 +185,15 @@ bool DXTexture::CopyTextureData(const Image* image)
     copySource.PlacedFootprint.Footprint.RowPitch = static_cast<UINT>(alignedRowPitch);
     copySource.PlacedFootprint.Footprint.Format = image->format;
 
-    // Set up copy destination
+    // コピー先の設定
     D3D12_TEXTURE_COPY_LOCATION copyDest = {};
     copyDest.pResource = m_textureResource.Get();
     copyDest.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     copyDest.SubresourceIndex = 0;
 
-    // Copy from upload heap to texture resource
     m_commandList->CopyTextureRegion(&copyDest, 0, 0, 0, &copySource, nullptr);
 
-    // Transition texture resource to shader resource state
+    // コピー完了後、テクスチャリソースをピクセルシェーダーで利用できる状態にする
     D3D12_RESOURCE_BARRIER barrier = {};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;

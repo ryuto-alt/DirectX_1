@@ -1,10 +1,9 @@
-#include"BasicShaderHeader.hlsli"
+#include "BasicShaderHeader.hlsli"
 
-Output BasicVS(float4 pos : POSITION, float2 uv : TEXCOORD)
+Output BasicVS(float3 pos : POSITION, float2 uv : TEXCOORD)
 {
-    Output output; //ピクセルシェーダーにわたす値
-    output.svpos = mul(mat,pos);
+    Output output;
+    output.svpos = mul(float4(pos, 1.0f), mat);
     output.uv = uv;
     return output;
-
 }
