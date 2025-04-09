@@ -607,12 +607,14 @@ void DXRenderer::Render()
     const float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
     m_cmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
-    // Update world matrix (rotation)
+    // 単純にY軸回転を更新
     m_angle += 0.01f;
     m_worldMatrix = XMMatrixRotationY(m_angle);
 
-    // Update constant buffer with combined matrix
+    // ワールド・ビュー・プロジェクション行列を合成
     XMMATRIX combinedMatrix = m_worldMatrix * m_camera->GetViewMatrix() * m_camera->GetProjectionMatrix();
+
+    // 定数バッファに書き込み
     memcpy(m_constantBufferMappedData, &combinedMatrix, sizeof(XMMATRIX));
 
     // Draw
@@ -621,8 +623,6 @@ void DXRenderer::Render()
     m_cmdList->IASetVertexBuffers(0, 1, &vertexBufferView);
     m_cmdList->IASetIndexBuffer(&indexBufferView);
     m_cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    //m_cmdList->IASetVertexBuffers(0, 1, &m_mesh->GetVertexBufferView());
-    //m_cmdList->IASetIndexBuffer(&m_mesh->GetIndexBufferView());
     m_cmdList->DrawIndexedInstanced(m_mesh->GetIndexCount(), 1, 0, 0, 0);
 
     // Transition back buffer from render target to present
