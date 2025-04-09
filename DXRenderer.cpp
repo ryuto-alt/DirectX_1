@@ -692,6 +692,34 @@ void DXRenderer::WaitForGpu()
     }
 }
 
+void DXRenderer::AddModelForRendering(std::unique_ptr<Model> model) {
+    if (model) {
+        m_models.push_back(std::move(model));
+    }
+}
+
+// Render関数内に以下の処理を追加
+// モデルの描画
+for (const auto& model : m_models) {
+    // モデルを描画
+    model->Bind(m_cmdList.Get());
+
+    for (const auto& submesh : model->GetSubMeshes()) {
+        // マテリアル設定（あれば）
+        if (submesh.Material) {
+            submesh.Material->Bind(m_cmdList.Get(), 1);
+        }
+
+        // 描画コマンド
+        m_cmdList->DrawIndexedInstanced(
+            submesh.IndexCount,
+            1,
+            submesh.StartIndexLocation,
+            submesh.BaseVertexLocation,
+            0);
+    }
+}
+
 size_t DXRenderer::AlignmentedSize(size_t size, size_t alignment)
 {
     return (size + alignment - 1) & ~(alignment - 1);

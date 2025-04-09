@@ -1,7 +1,27 @@
 ﻿#include "DXApplication.h"
 #include "DXRenderer.h"
+#include "OBJLoader.h"
+#include "SimpleModelLoader.h" // 簡易版ローダーを使用する場合
+#include "PathUtils.h"
 #include <iostream>
 #include <combaseapi.h>  // CoInitializeEx, CoUninitialize
+
+// OBJモデル描画するための関数
+void LoadAndRenderOBJModel(DXRenderer* renderer, const std::string& objFilePath) {
+    if (!renderer) return;
+
+    // モデルをロード
+    OBJLoader objLoader;
+    std::unique_ptr<Model> model = objLoader.LoadModel(renderer->GetDevice(), objFilePath);
+
+    if (!model) {
+        std::cerr << "Failed to load model: " << objFilePath << std::endl;
+        return;
+    }
+
+    // モデルの描画設定を追加
+    renderer->AddModelForRendering(std::move(model));
+}
 
 #ifdef _DEBUG
 int main()
@@ -32,6 +52,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         CoUninitialize();
         return 1;
     }
+
+    // レンダラーの取得
+    DXRenderer* renderer = app.GetRenderer();
+    if (!renderer) {
+        std::cerr << "Failed to get renderer" << std::endl;
+        CoUninitialize();
+        return 1;
+    }
+
+    // OBJモデルのパス
+    std::string objFilePath = "models/cube.obj"; // OBJファイルのパスを指定
+
+    // モデルの読み込みと描画設定
+    LoadAndRenderOBJModel(renderer, objFilePath);
 
     // アプリケーションの実行
     int result = app.Run();
