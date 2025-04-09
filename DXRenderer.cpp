@@ -607,14 +607,14 @@ void DXRenderer::Render()
     const float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
     m_cmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
-    // 単純にY軸回転を更新
+    // ?P????Y????]???X?V
     m_angle += 0.01f;
-   m_worldMatrix = XMMatrixRotationY(m_angle);
+    m_worldMatrix = XMMatrixRotationY(m_angle);
 
-    // ワールド・ビュー・プロジェクション行列を合成
+    // ???[???h?E?r???[?E?v???W?F?N?V?????s???????
     XMMATRIX combinedMatrix = m_worldMatrix * m_camera->GetViewMatrix() * m_camera->GetProjectionMatrix();
 
-    // 定数バッファに書き込み
+    // ???o?b?t?@?????????
     memcpy(m_constantBufferMappedData, &combinedMatrix, sizeof(XMMATRIX));
 
     // Draw
@@ -689,34 +689,6 @@ void DXRenderer::WaitForGpu()
         // Wait until the fence has been processed
         WaitForSingleObject(eventHandle, INFINITE);
         CloseHandle(eventHandle);
-    }
-}
-
-void DXRenderer::AddModelForRendering(std::unique_ptr<Model> model) {
-    if (model) {
-        m_models.push_back(std::move(model));
-    }
-}
-
-// Render関数内に以下の処理を追加
-// モデルの描画
-for (const auto& model : m_models) {
-    // モデルを描画
-    model->Bind(m_cmdList.Get());
-
-    for (const auto& submesh : model->GetSubMeshes()) {
-        // マテリアル設定（あれば）
-        if (submesh.Material) {
-            submesh.Material->Bind(m_cmdList.Get(), 1);
-        }
-
-        // 描画コマンド
-        m_cmdList->DrawIndexedInstanced(
-            submesh.IndexCount,
-            1,
-            submesh.StartIndexLocation,
-            submesh.BaseVertexLocation,
-            0);
     }
 }
 

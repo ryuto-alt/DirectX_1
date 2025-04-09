@@ -18,8 +18,6 @@ public:
     bool Initialize();
     void Render();
     void WaitForGpu();
-    ID3D12Device* GetDevice() const { return m_device.Get(); }
-    void AddModelForRendering(std::unique_ptr<Model> model);
 
 private:
     bool InitializeDevice();
